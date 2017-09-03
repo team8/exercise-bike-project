@@ -3,64 +3,63 @@
  * 
  * Device: Arduino Uno Rev3
  * 
- * @author Jonathan Zwiebel, Prashanti Anderson
- * @version 12 August 2016
+ * @author Jonathan Zwiebel, Eli Zucker
+ * @version 3 September 2017
  */
 
-#include <Servo.h>
+#include <Wire.h>
 
-int const HFX_PIN = 2; // Read pin for the U1881 hall effect sensor
-int const SERVO_PIN = 9 // Write pin for the HS-322HD servo motor
+int a_pot_pin = A0;
+int b_pot_pin = A1;
 
-// Object for servo motor
-Servo servo;
-
-// Time signature of previous tick polling (ms)
-long last_time_check;
-
-// Tick accumulator to store ticks since last time check 
-int tick_acc;
+int current_volume = 0;
 
 // Run on program initialization
 void setup() {
-  // Intializes the input and output pins
-  servo.attach(SERVO_PIN);
-  pinMode(HFX_PIN, INPUT_PULLUP);
-
-  // Sets the hall effect pin to call onRise when transfering from LOW to HIGH state
-  attachInterrupt(digitalPinToInterrupt(HFX_PIN), onRise, RISING);
-
-  // Creates a serial transfer with baud rate 9600
+  Wire.begin();
+  
+  initializeTPA6130();
   Serial.begin(9600);
-
-  // Sets the initial last_time_check value
-  last_time_check = millis();
 }
 
 // Executed on loop
 void loop() {  
-  // If time delta is greater than 2.5 s adjust servo position
-  if(millis() - last_time_check >= 2500) {
-    // Calculate and set servo
-    float scaledPos = (float) tick_acc / 30;
-    if(scaledPos > 1) {
-      scaledPos = 1;
-    }
-    float servoPos = 270 * (1 - scaledPos);
-    servo.write(servoPos);
-
-    // Printed output
-    Serial.print("Counted Ticks: ");
-    Serial.println(tick_acc);
-
-    // Reset loop
-    tick_acc = 0;
-    last_time_check = millis();
-  }
+  double a_value = analogRead(a_pot_pin);
+  Serial.print("A: ");
+  Serial.println(a_value);
+  int target_volume = (int) ((1020 - a_value) * 63 / 1020);
+  Serial.print("Volume: " );
+  Serial.println(target_volume);
+  setVolume(target_volume);
 }
 
-// Called when hall effect pin state switches from LOW to HIGH
-// Increases the tick accumulator
-void onRise() {
-  tick_acc++;
+// Initialize the TPA6130 chip
+void initializeTPA6130() {
+  Wire.beginTransmission(0x60);
+  Wire.write(1);
+  Wire.write(0xC0);
+  Wire.write(0x00);
+  Wire.endTransmission();
 }
+
+// Change the volume on the TPA6130 chip
+// Volume is an integer in the range 0-63 in increments of ~1 dB
+void setVolume(int volume) {
+  Wire.beginTransmission(0x60);
+  Wire.write(2);
+  Wire.write(volume);
+  Wire.write(0x00);
+  Wire.endTransmission();
+}
+
+// Mute the headphones
+void mute() {
+  Wire.beginTransmission(0x60);
+  Wire.write(2);
+  Wire.write(0xC0);
+  Wire.write(0x00);
+  Wire.endTransmission();
+}
+
+
+
